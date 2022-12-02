@@ -1,0 +1,7 @@
+dependencies:
+  - base == 4.*
+  - attoparsec
+  - bytestring
+executables:
+  haskell-hello:
+    main: Main.hs
