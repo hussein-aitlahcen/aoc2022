@@ -2,6 +2,9 @@ dependencies:
   - base == 4.*
   - attoparsec
   - bytestring
+  - containers
+  - bifunctors
+  - mtl
 executables:
   haskell-hello:
     main: Main.hs

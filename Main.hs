@@ -26,7 +26,7 @@ main :: IO ()
 main = traverse_ (\(f, i) -> f =<< BS.readFile ("day" <> show i <> ".txt")) $ zip days [1 ..]
   where
     days :: [Day]
-    days = [day1, day2, day3]
+    days = [day1, day2, day3, day4]
 
 day1 :: Day
 day1 = print . (\x -> (maxOfSum x, topThreeSum x)) . parse
@@ -105,7 +105,7 @@ day2 = print . sequence [totalScore . parse, totalScoreRecovered . parseRecover]
         <|> oponnentPaper 
         <|> oponnentScissor 
         <|> rock 
-        <|>  paper 
+        <|> paper 
         <|> scissor
 
     lose = parseEntry 'X' Lose
@@ -171,3 +171,33 @@ day3 = print . sequence [sumOfAllCommon . parseBags, sumOfAllCommonInGroups . pa
 
     sumOfAllCommonInGroups = 
       getSum . foldMap' (foldMap' Sum . S.toList . commonInGroup)
+
+day4 :: Day
+day4 = print . sequence [nbOf superset, nbOf overlap] . parsePairs
+  where
+    parseSection = 
+      (,) 
+        <$> (round @_ @Int <$> A.scientific) 
+        <*> (A.char '-' *> (round @_ @Int <$> A.scientific))
+
+    parsePairs = 
+      parseOrFail $
+        A.sepBy'
+          ((,) 
+            <$> parseSection 
+            <*> (A.char ',' *> parseSection)) 
+          A.space
+
+    sectionRange (x, y) = S.fromList [x .. y]
+
+    nbOf x = 
+      length 
+        . filter x 
+        . fmap (runJoin . fmap sectionRange . Join) 
+
+    superset (x, y) =
+      let s = S.size $ x `S.intersection` y
+      in s == S.size x || s == S.size y
+
+    overlap (x, y) =
+      S.size (x `S.intersection` y) > 0

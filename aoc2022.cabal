@@ -1,0 +1,22 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.35.0.
+--
+-- see: https://github.com/sol/hpack
+
+name:           aoc2022
+version:        0.0.0
+build-type:     Simple
+
+executable haskell-hello
+  main-is: Main.hs
+  other-modules:
+      Paths_aoc2022
+  build-depends:
+      attoparsec
+    , base ==4.*
+    , bifunctors
+    , bytestring
+    , containers
+    , mtl
+  default-language: Haskell2010
