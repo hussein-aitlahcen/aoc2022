@@ -5,6 +5,7 @@ dependencies:
   - containers
   - bifunctors
   - mtl
+  - lens
 executables:
   haskell-hello:
     main: Main.hs
