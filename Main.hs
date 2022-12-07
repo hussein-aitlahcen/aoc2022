@@ -31,7 +31,7 @@ main :: IO ()
 main = traverse_ (\(f, i) -> f =<< BS.readFile ("day" <> show i <> ".txt")) $ zip days [1 ..]
   where
     days :: [Day]
-    days = [day1, day2, day3, day4, day5]
+    days = [day1, day2, day3, day4, day5, day6]
 
 day1 :: Day
 day1 = print . (\x -> (maxOfSum x, topThreeSum x)) . parse
@@ -269,3 +269,13 @@ day5 =
 
     execute appMoves (stacks, moves) =
       appMoves moves (catMaybes <$> transpose stacks)
+
+day6 :: Day
+day6 = print . sequenceA [prefix 4 0, prefix 14 0] . parseStream
+  where
+    parseStream = parseOrFail $ A.many' (ord <$> A.anyChar)
+
+    prefix _ _ [] = Nothing
+    prefix k i xs
+      | S.size (S.fromList $ take k xs) == k = Just $ i + k
+      | otherwise = prefix k (i + 1) $ drop 1 xs
