@@ -1,27 +1,26 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Main where
 
+import Control.Applicative (Alternative (..))
+import Control.Lens
+import Control.Monad (join, replicateM)
 import qualified Data.Attoparsec.ByteString.Char8 as A
+import Data.Bifunctor.Join (Join (..))
+import Data.Bitraversable (Bitraversable (..))
 import qualified Data.ByteString.Char8 as BS
-import Data.Bitraversable (Bitraversable(..))
-import Data.Foldable (traverse_, foldMap', fold)
-import Data.List (sort)
-import Control.Monad (replicateM, join)
-import Data.Monoid (Sum (..), Endo (..))
-import Data.Maybe (catMaybes)
+import Data.Char (isUpper, ord)
+import Data.Foldable (fold, foldMap', traverse_)
+import Data.Functor (($>))
+import qualified Data.IntSet as S
+import Data.Ix (inRange)
+import Data.List (sort, transpose)
+import Data.Maybe (catMaybes, mapMaybe)
+import Data.Monoid (Endo (..), Sum (..))
 import Data.Ord (Down (..))
 import Data.Semigroup (Max (..))
-import Control.Applicative (Alternative(..))
-import Debug.Trace (traceShowId, traceShow)
-import qualified Data.IntSet as S
-import Data.Char (isUpper, ord)
-import Data.Bifunctor.Join (Join(..))
-import Data.List (transpose)
-import Control.Lens
-import Data.Ix (inRange)
+import Debug.Trace (traceShow, traceShowId)
 
 type Day = BS.ByteString -> IO ()
 
@@ -38,8 +37,8 @@ day1 :: Day
 day1 = print . (\x -> (maxOfSum x, topThreeSum x)) . parse
   where
     parse =
-      parseOrFail $ 
-          A.sepBy' (A.sepBy' (A.decimal @Int) A.space) A.space
+      parseOrFail $
+        A.sepBy' (A.sepBy' (A.decimal @Int) A.space) A.space
 
     maxOfSum =
       getMax
@@ -56,7 +55,7 @@ data Day2Shape
   = Rock
   | Paper
   | Scissor
-  deriving Show
+  deriving (Show)
 
 day2ShapeScore :: Day2Shape -> Int
 day2ShapeScore Rock = 1
@@ -67,7 +66,7 @@ data Day2RoundOutcome
   = Draw
   | Win
   | Lose
-  deriving Show
+  deriving (Show)
 
 day2Score :: Day2RoundOutcome -> Int
 day2Score Lose = 0
@@ -97,7 +96,7 @@ day2ShapeRecover x Draw = x
 day2 :: Day
 day2 = print . sequenceA [totalScore . parse, totalScoreRecovered . parseRecover]
   where
-    parseEntry c e = A.char c *> pure e
+    parseEntry c e = A.char c $> e
     oponnentRock = parseEntry 'A' Rock
     oponnentPaper = parseEntry 'B' Paper
     oponnentScissor = parseEntry 'C' Scissor
@@ -106,12 +105,12 @@ day2 = print . sequenceA [totalScore . parse, totalScoreRecovered . parseRecover
     paper = parseEntry 'Y' Paper
     scissor = parseEntry 'Z' Scissor
 
-    parseRoundShape = 
-      oponnentRock 
-        <|> oponnentPaper 
-        <|> oponnentScissor 
-        <|> rock 
-        <|> paper 
+    parseRoundShape =
+      oponnentRock
+        <|> oponnentPaper
+        <|> oponnentScissor
+        <|> rock
+        <|> paper
         <|> scissor
 
     lose = parseEntry 'X' Lose
@@ -122,11 +121,11 @@ day2 = print . sequenceA [totalScore . parse, totalScoreRecovered . parseRecover
 
     parse =
       parseOrFail $
-          A.sepBy' ((,) <$> parseRoundShape <*> (A.space *> parseRoundShape)) A.space
+        A.sepBy' ((,) <$> parseRoundShape <*> (A.space *> parseRoundShape)) A.space
 
     parseRecover =
       parseOrFail $
-          A.sepBy' ((,) <$> parseRoundShape <*> (A.space *> parseRoundOutcome)) A.space
+        A.sepBy' ((,) <$> parseRoundShape <*> (A.space *> parseRoundOutcome)) A.space
 
     computeScore (oponnentShape, shape) =
       day2Score (day2Round oponnentShape shape) + day2ShapeScore shape
@@ -139,31 +138,31 @@ day2 = print . sequenceA [totalScore . parse, totalScoreRecovered . parseRecover
     totalScoreRecovered =
       getSum . foldMap' (Sum . computeScoreRecover)
 
-
 day3 :: Day
 day3 = print . sequenceA [sumOfAllCommon . parseBags, sumOfAllCommonInGroups . parseGroupBags]
   where
     parseBag = A.many' A.letter_ascii
 
-    parseBags = 
+    parseBags =
       parseOrFail $ A.sepBy' parseBag A.space
 
     parseGroupBags =
       parseOrFail $
         A.sepBy'
-          ((,,) 
-            <$> parseBag 
-            <*> (A.space *> parseBag) 
-            <*> (A.space *> parseBag)) 
+          ( (,,)
+              <$> parseBag
+              <*> (A.space *> parseBag)
+              <*> (A.space *> parseBag)
+          )
           A.space
 
-    priority x 
+    priority x
       | isUpper x = ord x - ord 'A' + 27
       | otherwise = ord x - ord 'a' + 1
 
     transform = S.fromList . fmap priority
 
-    compartify x = 
+    compartify x =
       runJoin . fmap transform . Join $ splitAt (length x `div` 2) x
 
     commonInBag = uncurry S.intersection . compartify
@@ -173,109 +172,100 @@ day3 = print . sequenceA [sumOfAllCommon . parseBags, sumOfAllCommonInGroups . p
     sumOfAllCommon = getSum . foldMap' (Sum . sumOfCommon . commonInBag)
 
     commonInGroup (x, y, z) =
-       transform x `S.intersection` transform y `S.intersection` transform z
+      transform x `S.intersection` transform y `S.intersection` transform z
 
-    sumOfAllCommonInGroups = 
+    sumOfAllCommonInGroups =
       getSum . foldMap' (foldMap' Sum . S.toList . commonInGroup)
 
 day4 :: Day
 day4 = print . sequenceA [nbOf superset, nbOf overlap] . parsePairs
   where
-    parseSection = 
-      (,) 
+    parseSection =
+      (,)
         <$> A.decimal @Int
         <*> (A.char '-' *> A.decimal @Int)
 
-    parsePairs = 
+    parsePairs =
       parseOrFail $
         A.sepBy'
-          ((,) 
-            <$> parseSection 
-            <*> (A.char ',' *> parseSection)) 
+          ( (,)
+              <$> parseSection
+              <*> (A.char ',' *> parseSection)
+          )
           A.space
 
     sectionRange (x, y) = S.fromList [x .. y]
 
-    nbOf x = 
-      length 
-        . filter x 
-        . fmap (runJoin . fmap sectionRange . Join) 
+    nbOf x =
+      length
+        . filter x
+        . fmap (runJoin . fmap sectionRange . Join)
 
     superset (x, y) =
       let s = S.size $ x `S.intersection` y
-      in s == S.size x || s == S.size y
+       in s == S.size x || s == S.size y
 
     overlap (x, y) =
       S.size (x `S.intersection` y) > 0
 
 type Stack a = [a]
 
-pop :: Stack a -> Maybe a
-pop (x:_) = Just x
-pop _ = Nothing
-
-push :: Stack a -> a -> Stack a
-push xs x = x:xs
-
 day5 :: Day
-day5 = print 
-        . fmap (catMaybes . fmap headMay)
-        . sequence [
-            execute applyMovements,
-            execute applyMovementsBulk
-          ]
-        . parseOrFail parseStack
+day5 =
+  print
+    . fmap (mapMaybe headMay)
+    . sequenceA
+      [ execute applyMovements,
+        execute applyMovementsBulk
+      ]
+    . parseOrFail parseStack
   where
     parseStackEmpty = A.string "   "
 
-    parseStackElem = 
+    parseStackElem =
       A.char '[' *> A.letter_ascii <* A.char ']'
-    
+
     parseStackElems =
       A.sepBy1'
-        (Just <$> parseStackElem <|> (pure Nothing <* parseStackEmpty))
+        (Just <$> parseStackElem <|> (Nothing <$ parseStackEmpty))
         (A.satisfy (A.isHorizontalSpace . fromIntegral . ord))
 
-    parseMovement = 
-      (,,) 
+    parseMovement =
+      (,,)
         <$> (A.string "move" *> A.skipSpace *> A.decimal @Int <* A.skipSpace)
         <*> (A.string "from" *> A.skipSpace *> A.decimal @Int <* A.skipSpace)
         <*> (A.string "to" *> A.skipSpace *> A.decimal @Int)
 
-    parseStack = 
-      (,) 
-        <$> A.sepBy1' parseStackElems A.endOfLine <* A.endOfLine
-        <*> ((replicateM 2 (A.takeTill (A.isEndOfLine . fromIntegral . ord) *> A.endOfLine))  
-              *> (reverse <$> A.sepBy' parseMovement A.endOfLine))
-    
-    toStack !(Just x:xs) = x:toStack xs
-    toStack !(Nothing:xs) = toStack xs
-    toStack [] = []
-    
-    headMay (x:_) = Just x
+    parseStack =
+      (,)
+        <$> A.sepBy1' parseStackElems A.endOfLine
+        <* A.endOfLine
+        <*> ( replicateM 2 (A.takeTill (A.isEndOfLine . fromIntegral . ord) *> A.endOfLine)
+                *> (reverse <$> A.sepBy' parseMovement A.endOfLine)
+            )
+
+    headMay (x : _) = Just x
     headMay _ = Nothing
 
     applyMovement :: Int -> Int -> [Stack Char] -> [Stack Char]
     applyMovement from to s =
-      let ((x: _), s') = s & element (from - 1) <<%~ tail
-      in s' & element (to - 1) %~ (x:)
+      let (x : _, s') = s & element (from - 1) <<%~ tail
+       in s' & element (to - 1) %~ (x :)
 
-    applyMovements :: [(Int, Int, Int)] -> [Stack Char]  -> [Stack Char]
-    applyMovements = 
-      appEndo 
-      . fold
-      . fmap (\(n, from, to) -> foldMap Endo $ replicate n (applyMovement from to))
+    applyMovements :: [(Int, Int, Int)] -> [Stack Char] -> [Stack Char]
+    applyMovements =
+      appEndo
+        . foldMap (\(n, from, to) -> foldMap Endo $ replicate n (applyMovement from to))
 
-    applyMovementsBulk :: [(Int, Int, Int)] -> [Stack Char]  -> [Stack Char]
-    applyMovementsBulk = 
-      appEndo 
-      . fold
-      . fmap (
-        \(n, from, to) -> 
-          Endo $ \s ->
-            let (xs, s') = s & element (from - 1) <<%~ drop n 
-            in s' & element (to - 1) %~ (take n xs <>)
-      )
+    applyMovementsBulk :: [(Int, Int, Int)] -> [Stack Char] -> [Stack Char]
+    applyMovementsBulk =
+      appEndo
+        . foldMap
+          ( \(n, from, to) ->
+              Endo $ \s ->
+                let (xs, s') = s & element (from - 1) <<%~ drop n
+                 in s' & element (to - 1) %~ (take n xs <>)
+          )
 
-    execute appMoves (stacks, moves) =  
-      appMoves moves (toStack <$> transpose stacks)
+    execute appMoves (stacks, moves) =
+      appMoves moves (catMaybes <$> transpose stacks)
